@@ -1,9 +1,14 @@
 {
   "name": "@wxwind/koishi-plugin-gpt-chat",
-  "description": "chatgpt api ",
+  "description": "chatgpt api(test)",
   "version": "0.0.1",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
+  "koishi": {
+    "description": {
+      "zh": "简单的chatgpt问答(开发中)"
+    }
+  },
   "files": [
     "lib",
     "dist"
@@ -13,9 +18,15 @@
   "keywords": [
     "chatbot",
     "koishi",
-    "plugin"
+    "plugin",
+    "gpt",
+    "chat"
   ],
   "peerDependencies": {
     "koishi": "^4.14.1"
+  },
+  "dependencies": {
+    "https-proxy-agent": "^7.0.1",
+    "openai": "^4.2.0"
   }
 }
