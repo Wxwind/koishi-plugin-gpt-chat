@@ -1,7 +1,6 @@
-import { $, Context, Schema } from "koishi";
+import { $, Context, Logger, Schema } from "koishi";
 import OpenAI from "openai";
 import { HttpsProxyAgent } from "https-proxy-agent";
-import "reflect-metadata";
 import { getAnswer } from "./openai";
 import { Chat } from "./database";
 import { CreateChatCompletionRequestMessage } from "openai/resources/chat";
@@ -19,10 +18,14 @@ export interface Config {
 }
 
 export const Config: Schema<Config> = Schema.object({
-  apiKey: Schema.string(),
-  baseURL: Schema.string(),
-  proxy: Schema.string(),
-  continuousChatCount: Schema.number(),
+  apiKey: Schema.string().required().description("ApiKey"),
+  baseURL: Schema.string()
+    .required()
+    .description("openAI接口地址. 例如'https://api.example.com/v2'"),
+  proxy: Schema.string().description("代理. 例如'http://127.0.0.1:7890'"),
+  continuousChatCount: Schema.number()
+    .default(5)
+    .description("最大连续对话数. 例如'5'表示只会取历史最多5条记录参与对话"),
 });
 
 export function apply(ctx: Context, config: Config) {
@@ -36,6 +39,8 @@ export function apply(ctx: Context, config: Config) {
     baseURL: config.baseURL,
     httpAgent: httpAgent,
   });
+
+  const logger = new Logger("gpt-chat");
 
   ctx.model.extend(
     "chat",
@@ -68,30 +73,42 @@ export function apply(ctx: Context, config: Config) {
           return a.groupId === channelId && a.userId === userId;
         });
         if (isNil(nowSession)) {
+          const sId = crypto.randomUUID();
           const newS: SessionInfo = {
             userId,
             groupId: channelId,
             msgCount: 0,
-            sId: crypto.randomUUID(),
+            sId,
           };
           sessionList.push(newS);
           nowSession = newS;
-        } else if (
-          nowSession.msgCount >= config.continuousChatCount ||
-          options.new
-        ) {
+          logger.info(
+            "创建新对话(新用户和群组): userId: %s, groupId: %s,sessionId: %s",
+            userId,
+            channelId,
+            sId
+          );
+        } else if (options.new) {
+          const sId = crypto.randomUUID();
           const newS: SessionInfo = {
             userId,
             groupId: channelId,
             msgCount: 0,
-            sId: crypto.randomUUID(),
+            sId,
           };
           nowSession = newS;
+          logger.info(
+            "创建新对话(用户强制开启新对话): userId: %s, groupId: %s,sessionId: %s",
+            userId,
+            channelId,
+            sId
+          );
         }
 
         if (isNil(userId) || isNil(channelId)) {
           return "error: userId | channelId is nil";
         }
+        nowSession.msgCount += 1;
 
         // search history
         const q = await ctx.database
@@ -124,9 +141,10 @@ export function apply(ctx: Context, config: Config) {
           content: msg,
         });
 
-        console.log("提问", messages);
+        logger.info("提问: %s", messages);
 
         const answer = (await getAnswer(openai, messages)) || "";
+        logger.info("回答: \n%s", answer);
         const c: Partial<Chat> = {
           userId,
           groupId: channelId,
@@ -136,11 +154,10 @@ export function apply(ctx: Context, config: Config) {
           create_time: timestamp,
         };
 
-        console.log("回答", answer);
         ctx.database.create("chat", c);
         return answer;
       } catch (err) {
-        console.error((err as Error).message);
+        logger.info(err);
         return `服务器内部错误${(err as Error).message}`;
       }
     });

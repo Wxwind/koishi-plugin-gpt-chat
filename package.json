@@ -1,7 +1,7 @@
 {
   "name": "@wxwind/koishi-plugin-gpt-chat",
-  "description": "chatgpt api(test)",
-  "version": "0.0.2",
+  "description": "chatgpt conversation,support proxy(test)",
+  "version": "0.0.9",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "koishi": {
