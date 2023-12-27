@@ -15,17 +15,19 @@ export interface Config {
   baseURL: string;
   proxy: string;
   continuousChatCount: number;
+  allowPrivate: boolean;
 }
 
 export const Config: Schema<Config> = Schema.object({
   apiKey: Schema.string().required().description("ApiKey"),
   baseURL: Schema.string()
     .required()
-    .description("openAI接口地址. 例如'https://api.example.com/v2'"),
-  proxy: Schema.string().description("代理. 例如'http://127.0.0.1:7890'"),
+    .description("openAI接口地址. 例如 https://api.example.com/v2"),
+  proxy: Schema.string().description("代理. 例如 http://127.0.0.1:7890"),
   continuousChatCount: Schema.number()
     .default(5)
     .description("最大连续对话数. 例如'5'表示只会取历史最多5条记录参与对话"),
+  allowPrivate: Schema.boolean().default(false).description("允许私聊"),
 });
 
 export function apply(ctx: Context, config: Config) {
@@ -65,7 +67,7 @@ export function apply(ctx: Context, config: Config) {
         if (!session) {
           return `error: session is null`;
         }
-        if (session.isDirect) {
+        if (session.isDirect && !config.allowPrivate) {
           return "warn: 该命令仅支持在群组内访问";
         }
         const { userId, channelId, timestamp } = session;
@@ -119,7 +121,7 @@ export function apply(ctx: Context, config: Config) {
           .orderBy("create_time", "desc")
           .limit(config.continuousChatCount)
           .execute();
-
+        q.reverse();
         const messages: CreateChatCompletionRequestMessage[] = [];
 
         for (const c of q) {
@@ -141,7 +143,7 @@ export function apply(ctx: Context, config: Config) {
           content: msg,
         });
 
-        logger.info("提问: %s", messages);
+        logger.info("提问: %s", JSON.stringify(messages));
 
         const answer = (await getAnswer(openai, messages)) || "";
         logger.info("回答: \n%s", answer);
